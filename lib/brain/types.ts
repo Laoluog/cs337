@@ -25,6 +25,7 @@ export interface CaseData {
   createdAt: string;
   patient: PatientInfo;
   basePrompt: string;
+  generatedPrompt?: string;
   ehrFiles: FileMeta[];
   ctScans: FileMeta[];
   images: Partial<Record<Timepoint, ImageResult>>;

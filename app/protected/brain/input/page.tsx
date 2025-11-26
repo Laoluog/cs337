@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { PatientInfo } from "@/lib/brain/types";
 import { createCaseSupabase } from "@/lib/brain/db";
 import { requestModelPrompt } from "@/lib/brain/model";
+import { requestGeneratedImages } from "@/lib/brain/generator";
+import { updateCaseImagesSupabase } from "@/lib/brain/db";
+import type { Timepoint } from "@/lib/brain/types";
 
 export default function BrainInputPage() {
   const router = useRouter();
@@ -38,10 +41,35 @@ export default function BrainInputPage() {
 
       const created = await createCaseSupabase({
         patient,
-        basePrompt: generatedPrompt ?? basePrompt,
+        basePrompt,
+        generatedPrompt: generatedPrompt ?? null,
         ehrFiles,
         ctScans: ctFiles,
       });
+
+      // Generate images from backend using generatedPrompt (fallback to basePrompt)
+      const finalPrompt = generatedPrompt ?? basePrompt;
+      try {
+        const urls = await requestGeneratedImages({ prompt: finalPrompt });
+        const tps: Timepoint[] = ["now", "3m", "6m", "12m"];
+        const images = tps.reduce((acc, tp) => {
+          const url = urls[tp];
+          if (url) {
+            acc[tp] = {
+              url,
+              timepoint: tp,
+              promptUsed: finalPrompt,
+            };
+          }
+          return acc;
+        }, {} as Record<Timepoint, { url: string; timepoint: Timepoint; promptUsed: string }>);
+        if (Object.keys(images).length > 0) {
+          await updateCaseImagesSupabase(created.id, images);
+        }
+      } catch {
+        // If generation fails, continue to case page; user can retry there
+      }
+
       router.push(`/protected/brain/${created.id}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";

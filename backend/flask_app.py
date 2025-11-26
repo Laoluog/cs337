@@ -15,6 +15,9 @@ Replace the stubbed logic with your model inference.
 
 from flask import Flask, request, jsonify
 import json
+import os
+import time
+import requests
 
 app = Flask(__name__)
 
@@ -41,6 +44,72 @@ def model_prompt():
   generated_prompt = (f"{base_prompt} [patient:{name or 'n/a'} | {file_hint}]").strip()
 
   return jsonify({"generated_prompt": generated_prompt})
+
+@app.route("/model/generate_images", methods=["POST"])
+def generate_images():
+  """
+  JSON body: { "prompt": str, "timepoints": ["now","3m","6m","12m"]? }
+  Returns: { "images": { "now": url, "3m": url, "6m": url, "12m": url } }
+  """
+  payload = request.get_json(silent=True) or {}
+  prompt = payload.get("prompt") or ""
+  timepoints = payload.get("timepoints") or ["now", "3m", "6m", "12m"]
+
+  # Hard-coded BFL endpoint; replace with your own model as needed
+  bfl_url = "https://api.bfl.ai/v1/flux-kontext-pro"
+  api_key = os.environ.get("BFL_API_KEY")
+  if not api_key:
+    return jsonify({"error": "Missing BFL_API_KEY"}), 500
+
+  def generate_one(p: str) -> str:
+    resp = requests.post(
+      bfl_url,
+      headers={
+        "accept": "application/json",
+        "x-key": api_key,
+        "Content-Type": "application/json",
+      },
+      json={"prompt": p},
+      timeout=30,
+    ).json()
+    polling_url = resp.get("polling_url")
+    if not polling_url:
+      raise RuntimeError(f"Bad response: {resp}")
+    # Poll up to ~60s
+    started = time.time()
+    while True:
+      time.sleep(0.5)
+      result = requests.get(
+        polling_url,
+        headers={"accept": "application/json", "x-key": api_key},
+        timeout=30,
+      ).json()
+      status = result.get("status")
+      if status == "Ready":
+        return result["result"]["sample"]
+      if status in ("Error", "Failed"):
+        raise RuntimeError(f"Generation failed: {result}")
+      if time.time() - started > 90:
+        raise TimeoutError("Timed out waiting for image")
+
+  # Slightly tailor the prompt by timepoint; hard-coded phrasing
+  tp_to_suffix = {
+    "now": "current brain state",
+    "3m": "brain state in approximately 3 months",
+    "6m": "brain state in approximately 6 months",
+    "12m": "brain state in approximately 12 months",
+  }
+  images = {}
+  for tp in timepoints:
+    suffix = tp_to_suffix.get(tp, str(tp))
+    composed = f"{prompt}. Please depict the {suffix}."
+    try:
+      url = generate_one(composed)
+      images[tp] = url
+    except Exception as e:
+      images[tp] = None
+
+  return jsonify({"images": images})
 
 if __name__ == "__main__":
   # For local testing:

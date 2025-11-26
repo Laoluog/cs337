@@ -13,6 +13,7 @@ export type CaseRow = {
   patient_mrn: string | null;
   patient_notes: string | null;
   base_prompt: string | null;
+  generated_prompt: string | null;
   ehr_files: Array<{ name: string; size: number; type: string; path?: string }> | null;
   ct_scans: Array<{ name: string; size: number; type: string; path?: string }> | null;
   images: Partial<Record<Timepoint, ImageResult>> | null;
@@ -31,6 +32,7 @@ function toCaseData(row: CaseRow): CaseData {
       notes: row.patient_notes ?? undefined,
     },
     basePrompt: row.base_prompt ?? "",
+    generatedPrompt: row.generated_prompt ?? undefined,
     ehrFiles: row.ehr_files ?? [],
     ctScans: row.ct_scans ?? [],
     images: row.images ?? {},
@@ -70,6 +72,7 @@ export async function getCaseSupabase(caseId: string): Promise<CaseData> {
 export async function createCaseSupabase(input: {
   patient: PatientInfo;
   basePrompt: string;
+  generatedPrompt?: string | null;
   ehrFiles: File[];
   ctScans: File[];
 }): Promise<CaseData> {
@@ -82,6 +85,7 @@ export async function createCaseSupabase(input: {
     patient_mrn: input.patient.mrn ?? null,
     patient_notes: input.patient.notes ?? null,
     base_prompt: input.basePrompt,
+    generated_prompt: input.generatedPrompt ?? null,
     ehr_files: input.ehrFiles.map(fileMeta),
     ct_scans: input.ctScans.map(fileMeta),
     images: {}, // initially empty
@@ -104,19 +108,35 @@ export async function generateImagesSupabase(params: {
   const current = await getCaseSupabase(params.caseId);
   const tps = params.timepoints ?? ["now", "3m", "6m", "12m"];
   const nextImages: Partial<Record<Timepoint, ImageResult>> = { ...current.images };
+  const chosenBase = current.generatedPrompt ?? current.basePrompt;
   for (const tp of tps) {
     nextImages[tp] = {
       url: placeholder(current.id, tp),
       timepoint: tp,
       promptUsed: params.additionalPrompt
-        ? `${current.basePrompt} ${params.additionalPrompt}`.trim()
-        : current.basePrompt,
+        ? `${chosenBase} ${params.additionalPrompt}`.trim()
+        : chosenBase,
     };
   }
   const { data, error } = await supabase
     .from("cases")
     .update({ images: nextImages })
     .eq("id", params.caseId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return toCaseData(data as CaseRow);
+}
+
+export async function updateCaseImagesSupabase(
+  caseId: string,
+  images: Partial<Record<Timepoint, ImageResult>>
+): Promise<CaseData> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("cases")
+    .update({ images })
+    .eq("id", caseId)
     .select("*")
     .single();
   if (error) throw error;
