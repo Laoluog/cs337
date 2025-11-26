@@ -1,3 +1,5 @@
+# NOT IN USE - IMPLEMENTED IN FLASK_APP.PY
+
 import os
 import requests
 import time
