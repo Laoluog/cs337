@@ -2,12 +2,19 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { listLocalCases } from "@/lib/brain/storage";
+import { listCasesSupabase } from "@/lib/brain/db";
 
 export function HomeLanding() {
   const [count, setCount] = useState(0);
   useEffect(() => {
-    setCount(listLocalCases().length);
+    (async () => {
+      try {
+        const list = await listCasesSupabase();
+        setCount(list.length);
+      } catch {
+        setCount(0);
+      }
+    })();
   }, []);
 
   return (

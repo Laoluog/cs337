@@ -5,8 +5,8 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { createLocalCase } from "@/lib/brain/storage";
 import { PatientInfo } from "@/lib/brain/types";
+import { createCaseSupabase } from "@/lib/brain/db";
 
 export default function BrainInputPage() {
   const router = useRouter();
@@ -22,7 +22,7 @@ export default function BrainInputPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const created = createLocalCase({
+      const created = await createCaseSupabase({
         patient,
         basePrompt,
         ehrFiles,

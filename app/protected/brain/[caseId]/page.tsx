@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { getLocalCase, generateLocalImages } from "@/lib/brain/storage";
 import { CaseData, Timepoint } from "@/lib/brain/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { getCaseSupabase, generateImagesSupabase } from "@/lib/brain/db";
 
 const ALL_TPS: Timepoint[] = ["now", "3m", "6m", "12m"];
 
@@ -32,41 +32,53 @@ export default function BrainCaseOutputPage() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    const found = getLocalCase(caseId);
-    if (!found) {
-      setError("Case not found");
-      setLoading(false);
-      return;
-    }
-    setData(found);
-    setLoading(false);
+    (async () => {
+      try {
+        const found = await getCaseSupabase(caseId);
+        setData(found);
+      } catch (e) {
+        setError("Case not found");
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [caseId]);
 
   const onGenerate = () => {
-    setLoading(true);
-    setError(null);
-    const updated = generateLocalImages(caseId);
-    if (!updated) {
-      setError("Failed to generate images");
-    } else {
-      setData(updated);
-    }
-    setLoading(false);
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const updated = await generateImagesSupabase({ caseId });
+        setData(updated);
+      } catch {
+        setError("Failed to generate images");
+      } finally {
+        setLoading(false);
+      }
+    })();
   };
 
   const onReprompt = () => {
     if (!editText.trim()) return;
     const tps = ALL_TPS.filter((tp) => selected[tp]);
-    setLoading(true);
-    setError(null);
-    const updated = generateLocalImages(caseId, editText.trim(), tps);
-    if (!updated) {
-      setError("Failed to reprompt images");
-    } else {
-      setData(updated);
-      setEditText("");
-    }
-    setLoading(false);
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const updated = await generateImagesSupabase({
+          caseId,
+          additionalPrompt: editText.trim(),
+          timepoints: tps,
+        });
+        setData(updated);
+        setEditText("");
+      } catch {
+        setError("Failed to reprompt images");
+      } finally {
+        setLoading(false);
+      }
+    })();
   };
 
   return (

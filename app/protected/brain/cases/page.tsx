@@ -2,14 +2,21 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { listLocalCases } from "@/lib/brain/storage";
 import { CaseData } from "@/lib/brain/types";
+import { listCasesSupabase } from "@/lib/brain/db";
 
 export default function AllCasesPage() {
   const [cases, setCases] = useState<CaseData[]>([]);
 
   useEffect(() => {
-    setCases(listLocalCases());
+    (async () => {
+      try {
+        const list = await listCasesSupabase();
+        setCases(list);
+      } catch {
+        setCases([]);
+      }
+    })();
   }, []);
 
   return (
