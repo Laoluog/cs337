@@ -145,7 +145,7 @@ export default function BrainCaseOutputPage() {
                         }
                       }}
                     >
-                      {videoLoading[tp] ? "Generating video..." : "Veo 360 (7s)"}
+                      {videoLoading[tp] ? "Generating video..." : "Generate Video"}
                     </Button>
                     {videoUrl ? (
                       <a className="text-sm underline" href={videoUrl} target="_blank" rel="noreferrer">

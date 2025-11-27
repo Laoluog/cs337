@@ -23,6 +23,8 @@ import uuid
 from pathlib import Path
 from google import genai
 from google.genai import types
+import base64
+import mimetypes
 import time
 from google import genai
 
@@ -164,15 +166,14 @@ def generate_video():
     try:
       resp = requests.get(image_url, timeout=30)
       resp.raise_for_status()
-      tmp_dir = Path(__file__).parent / "tmp_refs"
-      tmp_dir.mkdir(parents=True, exist_ok=True)
-      img_path = tmp_dir / f"ref_{uuid.uuid4().hex}.jpg"
-      with open(img_path, "wb") as f:
-        f.write(resp.content)
-      uploaded = client.files.upload(file=str(img_path))
+      content_bytes = resp.content
+      mime = resp.headers.get("Content-Type") or mimetypes.guess_type(image_url)[0] or "image/jpeg"
       brain_reference = types.VideoGenerationReferenceImage(
-        image=uploaded,
-        reference_type="asset",
+        image={
+          "bytesBase64Encoded": base64.b64encode(content_bytes).decode("utf-8"),
+          "mimeType": mime,
+        },
+        reference_type="inline",
       )
       reference_images.append(brain_reference)
     except Exception as e:
