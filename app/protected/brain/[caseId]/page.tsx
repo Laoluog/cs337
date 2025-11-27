@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getCaseSupabase, generateImagesSupabase } from "@/lib/brain/db";
+import { requestVeoVideo } from "@/lib/brain/video";
 
 const ALL_TPS: Timepoint[] = ["now", "3m", "6m", "12m"];
 
@@ -24,6 +25,13 @@ export default function BrainCaseOutputPage() {
     "12m": true,
   });
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = useState<Record<Timepoint, boolean>>({
+    now: false,
+    "3m": false,
+    "6m": false,
+    "12m": false,
+  });
 
   const anySelected = useMemo(
     () => ALL_TPS.some((tp) => selected[tp]),
@@ -113,6 +121,38 @@ export default function BrainCaseOutputPage() {
                       <span className="text-sm text-muted-foreground">No image yet</span>
                     )}
                   </div>
+                  <div className="mt-2 flex items-center gap-3">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={!img || videoLoading[tp]}
+                      onClick={async () => {
+                        if (!img || !data) return;
+                        setVideoLoading((s) => ({ ...s, [tp]: true }));
+                        try {
+                          const prompt =
+                            img.promptUsed || data.generatedPrompt || data.basePrompt || "";
+                          const url = await requestVeoVideo({
+                            imageUrl: img.url,
+                            prompt,
+                            seconds: 7,
+                          });
+                          setVideoUrl(url);
+                        } catch {
+                          // ignore for now
+                        } finally {
+                          setVideoLoading((s) => ({ ...s, [tp]: false }));
+                        }
+                      }}
+                    >
+                      {videoLoading[tp] ? "Generating video..." : "Veo 360 (7s)"}
+                    </Button>
+                    {videoUrl ? (
+                      <a className="text-sm underline" href={videoUrl} target="_blank" rel="noreferrer">
+                        Open video
+                      </a>
+                    ) : null}
+                  </div>
                   <div className="mt-2 text-xs text-muted-foreground line-clamp-2">
                     {img?.promptUsed ? `Prompt: ${img.promptUsed}` : "—"}
                   </div>
@@ -176,6 +216,30 @@ export default function BrainCaseOutputPage() {
               type="button"
               className="absolute top-2 right-2 rounded px-3 py-1 bg-white/90 text-black text-sm hover:bg-white"
               onClick={() => setViewerUrl(null)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {videoUrl ? (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setVideoUrl(null)}
+        >
+          <div className="relative w-full h-full max-w-5xl max-h-[90vh] flex items-center justify-center">
+            <video
+              src={videoUrl}
+              controls
+              autoPlay
+              className="max-h-[90vh] max-w-[90vw] rounded shadow-lg bg-black"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              type="button"
+              className="absolute top-2 right-2 rounded px-3 py-1 bg-white/90 text-black text-sm hover:bg-white"
+              onClick={() => setVideoUrl(null)}
             >
               Close
             </button>

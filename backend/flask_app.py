@@ -19,6 +19,12 @@ import json
 import os
 import time
 import requests
+import uuid
+from pathlib import Path
+from google import genai
+from google.genai import types
+import time
+from google import genai
 
 app = Flask(__name__)
 # Allow frontend (http://localhost:3000) to call Flask (http://localhost:5001)
@@ -26,22 +32,49 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 hardcoded_prompt = ([
-  {
-    "time_point": "now",
-    "prompt": "High-resolution axial CT scan of the human brain, soft tissue window for brain parenchyma. Patient is a 72-year-old female, Evelyn Reed, diagnosed with early-stage Alzheimer's disease 6 months prior, currently on Donepezil. Image shows mild generalized cortical atrophy, distinctly mild hippocampal atrophy, and subtle widening of the sulci in the temporal and parietal regions. Ventricular size is within normal limits for age. No signs of acute hemorrhage, mass effect, or significant vascular calcifications. This represents the current baseline anatomical condition after 6 months of managed symptoms, displaying realistic CT characteristics. Clinically accurate, photorealistic medical rendering."
-  },
-  {
-    "time_point": "3m",
-    "prompt": "High-resolution axial CT scan of the human brain, soft tissue window for brain parenchyma. Patient is a 72-year-old female, Evelyn Reed, 3 months post 'current state' (9 months post-diagnosis) with continued Donepezil. Image exhibits *slightly increased* generalized cortical atrophy compared to the baseline, *noticeably moderate hippocampal atrophy*, and *mildly increased widening* of the sulci in the temporal and parietal regions. Lateral ventricles show *minimal, subtle enlargement*. No new acute findings, mass effect, or significant vascular changes. This illustrates early, subtle progression of Alzheimer's-related neurodegeneration, demonstrating a realistic transformation from the 'now' state. Clinically accurate, photorealistic medical rendering."
-  },
-  {
-    "time_point": "6m",
-    "prompt": "High-resolution axial CT scan of the human brain, soft tissue window for brain parenchyma. Patient is a 72-year-old female, Evelyn Reed, 6 months post 'current state' (12 months post-diagnosis). Image reveals *distinctly moderate generalized cortical atrophy*, *marked hippocampal atrophy*, and *moderate widening* of the sulci, particularly prominent in the temporal and parietal lobes. Lateral ventricles show *definite, mild enlargement*. No new acute lesions or significant density changes indicating hemorrhage. This represents continued, more evident progression of Alzheimer's disease, showcasing a realistic and expected evolution from the 3-month state. Clinically accurate, photorealistic medical rendering."
-  },
-  {
-    "time_point": "12m",
-    "prompt": "High-resolution axial CT scan of the human brain, soft tissue window for brain parenchyma. Patient is a 72-year-old female, Evelyn Reed, 12 months post 'current state' (18 months post-diagnosis). Image demonstrates *significant generalized cortical atrophy*, *severe hippocampal atrophy with pronounced volume loss*, and *marked widening* of cortical sulci across the cerebral hemispheres, most prominent in temporal and parietal regions. Lateral and third ventricles appear *moderately enlarged*, consistent with ex-vacuo hydrocephalus due to brain volume loss. No new acute pathology or abnormal density. This illustrates substantial progression of Alzheimer's-related neurodegeneration, representing the realistic culmination of the 12-month transformation. Clinically accurate, photorealistic medical rendering."
-  }
+    {
+        "time_point": "now",
+        "prompt":
+            "Generate exactly one high-resolution axial (top-down) CT scan image of the human brain. "
+            "Soft tissue window for brain parenchyma. The patient is a 72-year-old female, Evelyn Reed, "
+            "diagnosed with early-stage Alzheimer's disease 6 months ago, currently on Donepezil. The image "
+            "must show mild generalized cortical atrophy, distinctly mild hippocampal atrophy, and subtle "
+            "widening of the sulci in the temporal and parietal regions. Ventricular size should appear "
+            "normal for age. No acute hemorrhage, mass effect, or vascular calcifications. Only show one image, "
+            "top-down CT view. Do not render multiple images or views. Clinically accurate, photorealistic."
+    },
+    {
+        "time_point": "3m",
+        "prompt":
+            "Create exactly one high-resolution axial CT scan (top-down view) image of the brain, "
+            "soft tissue window. The patient is a 72-year-old female, Evelyn Reed, now 3 months after the "
+            "previous state (9 months post-diagnosis) with continued Donepezil. Depict slightly increased "
+            "generalized cortical atrophy versus baseline, noticeably moderate hippocampal atrophy, and mildly "
+            "increased widening of temporal and parietal sulci. Lateral ventricles with minimal, subtle "
+            "enlargement. No new acute findings or mass effect. Only one image, top-down CT. No other views. "
+            "Clinically accurate, photorealistic."
+    },
+    {
+        "time_point": "6m",
+        "prompt":
+            "Produce a single, high-resolution axial (top-down) CT image of the brain, soft tissue window. "
+            "Patient: 72-year-old female, Evelyn Reed, 6 months after previous state (12 months post-diagnosis). "
+            "Show distinctly moderate generalized cortical atrophy, marked hippocampal atrophy, and moderate "
+            "widening of sulci, most apparent in the temporal and parietal lobes. Lateral ventricles should "
+            "show definite, mild enlargement. No new acute lesions. The output must be only one top-down brain "
+            "CT image. Clinically accurate, photorealistic."
+    },
+    {
+        "time_point": "12m",
+        "prompt":
+            "Output exactly one high-resolution top-down (axial) CT scan image of the brain with soft tissue "
+            "window. Patient: 72-year-old female, Evelyn Reed, 12 months after previous state (18 months "
+            "post-diagnosis). Clearly show significant generalized cortical atrophy, severe hippocampal atrophy "
+            "with pronounced volume loss, and marked widening of cortical sulci in temporal and parietal regions. "
+            "Lateral and third ventricles appear moderately enlarged, consistent with ex-vacuo hydrocephalus. "
+            "No new acute pathology or abnormal density. Absolutely ensure a single image, axial/top-down CT only. "
+            "Clinically accurate, photorealistic."
+    }
 ])
 # todo(NISHANK): Implement this endpoint.
 @app.route("/model/prompt", methods=["POST"])
@@ -73,6 +106,110 @@ def model_prompt():
 
   return jsonify({"generated_prompt": generated_prompt})
   """
+
+@app.route("/model/generate_video", methods=["POST"])
+def generate_video():
+  api_key = os.environ.get("GOOGLE_API_KEY")
+  if not api_key:
+    return jsonify({"error": "Missing GOOGLE_API_KEY"}), 500
+  client = genai.Client(api_key=api_key)
+
+  payload = request.get_json(silent=True) or {}
+  image_url = payload.get("image_url")
+  user_prompt = payload.get("prompt")
+  time_point = payload.get("time_point")
+  seconds = int(payload.get("seconds") or 7)
+
+  # Normalize prompt:
+  # - If a list is provided (e.g., [{time_point, prompt}, ...]), pick by time_point or first available
+  # - If a dict is provided (e.g., {prompt: "..."}), extract "prompt"
+  # - Else expect a string
+  if isinstance(user_prompt, list):
+    chosen = None
+    if time_point:
+      for item in user_prompt:
+        if isinstance(item, dict) and item.get("time_point") == time_point and isinstance(item.get("prompt"), str):
+          chosen = item.get("prompt")
+          break
+    if not chosen:
+      for item in user_prompt:
+        if isinstance(item, dict) and isinstance(item.get("prompt"), str):
+          chosen = item.get("prompt")
+          break
+    if not chosen:
+      for item in user_prompt:
+        if isinstance(item, str):
+          chosen = item
+          break
+    user_prompt = chosen
+  elif isinstance(user_prompt, dict):
+    maybe = user_prompt.get("prompt")
+    user_prompt = maybe if isinstance(maybe, str) else None
+
+  # Use normalized client prompt when available, otherwise fallback to a sensible default
+  prompt = user_prompt or (
+    "Create a 7‑second, ultra high‑resolution, 360‑degree, eye‑level orbit around a single human brain matching the provided CT/MRI reference image. "
+    "Subject is a medically accurate human brain with realistic cortical gyri and sulci; preserve anatomical proportions and density cues from the reference. "
+    "Camera performs a smooth, stabilized dolly‑orbit over the full duration. "
+    "Composition begins medium‑wide, transitions briefly to a medium shot revealing temporal and hippocampal contours, then returns to medium‑wide by the end. "
+    "Style is clinical, photorealistic medical visualization; no artistic liberties. "
+    "Deep focus with a 35–50mm feel; minimal lens breathing; no motion blur artifacts. "
+    "Neutral medium‑gray background with soft key and subtle rim light to accent form; balanced, natural contrast and color. "
+    "No text, logos, watermarks, or extraneous elements."
+  )
+
+  # Download the provided image URL and upload it as a reference asset
+  reference_images = []
+  if image_url:
+    try:
+      resp = requests.get(image_url, timeout=30)
+      resp.raise_for_status()
+      tmp_dir = Path(__file__).parent / "tmp_refs"
+      tmp_dir.mkdir(parents=True, exist_ok=True)
+      img_path = tmp_dir / f"ref_{uuid.uuid4().hex}.jpg"
+      with open(img_path, "wb") as f:
+        f.write(resp.content)
+      uploaded = client.files.upload(file=str(img_path))
+      brain_reference = types.VideoGenerationReferenceImage(
+        image=uploaded,
+        reference_type="asset",
+      )
+      reference_images.append(brain_reference)
+    except Exception as e:
+      print(f"Failed to use reference image {image_url}: {e}")
+
+  # Configure generation; include reference_images if available
+  gen_config = types.GenerateVideosConfig(
+    reference_images=reference_images if reference_images else None,
+    # If duration is supported in your SDK version, you can add it here, e.g.:
+    # duration_seconds=seconds,
+  )
+
+  operation = client.models.generate_videos(
+    model="veo-3.1-generate-preview",
+    prompt=prompt,
+    config=gen_config,
+  )
+
+  # Poll the operation status until the video is ready.
+  while not operation.done:
+      print("Waiting for video generation to complete...")
+      time.sleep(10)
+      operation = client.operations.get(operation)
+
+  # Download the video and save to static/videos with a unique filename.
+  video = operation.response.generated_videos[0]
+  client.files.download(file=video.video)
+  filename = f"brain_{uuid.uuid4().hex}.mp4"
+  static_dir = Path(__file__).parent / "static" / "videos"
+  static_dir.mkdir(parents=True, exist_ok=True)
+  output_path = static_dir / filename
+  video.video.save(str(output_path))
+  print(f"Generated video saved to {output_path}")
+  # Serve via Flask static: /static/videos/<filename>
+  base = request.host_url.rstrip("/")
+  video_url = f"{base}/static/videos/{filename}"
+  return jsonify({"video_url": video_url})
 
 @app.route("/model/generate_images", methods=["POST"])
 def generate_images():
