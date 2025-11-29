@@ -79,7 +79,7 @@ hardcoded_prompt = ([
     }
 ])
 # todo(NISHANK): Implement this endpoint.
-GEMINI_API_KEY = "AIzaSyDZzNJw90nAlyRdQ4Me8GObBp9keMKWg68"
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME", "gemini-pro-latest")
 
 def _encode_ct_files(ct_files):
