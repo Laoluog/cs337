@@ -614,9 +614,9 @@ If you use BrainCast AI in academic research, please cite:
 ```bibtex
 @software{braincast_ai_2025,
   title = {BrainCast AI: Multimodal Longitudinal Brain Imaging Synthesis},
-  author = {Your Research Team},
+  author = {HealthEp},
   year = {2025},
-  url = {https://github.com/yourusername/cs337project}
+  url = {https://github.com/laoluog/cs337project}
 }
 ```
 
