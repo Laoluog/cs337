@@ -16,7 +16,7 @@
 
 The platform orchestrates three state-of-the-art AI models to transform raw clinical inputs into rich, longitudinal visual narratives:
 
-1. **Gemini Pro** – Contextual prompt generation from multimodal clinical data
+1. **Gemini Pro** – Contextual prompt generation from multimodal clinical data (trained on MIMIC-IV v3.1 dataset)
 2. **Flux Kontext Pro** – High-fidelity medical image synthesis 
 3. **Google Veo 3.1** – Cinematic 3D brain visualizations
 
